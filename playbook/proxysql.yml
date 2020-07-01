@@ -1,0 +1,32 @@
+---
+- name: ProxySQL Setup
+  gather_facts: false
+  hosts: all
+  tasks:
+     - name: Transfering ProxySQL install script
+       copy: src=proxysql/proxysql_install.sh dest=/tmp mode=0777
+
+     - name: Transfering ProxySQL configuration script
+       copy: src=proxysql/proxysql_config.sh dest=/tmp mode=0777
+
+     - name: Running ProxySQL install script
+       command: "sh /tmp/proxysql_install.sh"
+       register: cmd_install
+     - debug: msg="{{ cmd_install.stdout_lines|replace('\\t',' ') }}"
+     - debug: msg="{{ cmd_install.stderr_lines|replace('\\t',' ') }}"
+
+     - name: Running ProxySQL configuration script
+       command: "sh /tmp/proxysql_config.sh {{ px_mode }} {{ monitor_user }} {{ monitor_pass }}"
+       register: cmd_config
+     - debug: msg="{{ cmd_config.stdout_lines|replace('\\t',' ') }}"
+     - debug: msg="{{ cmd_config.stderr_lines|replace('\\t',' ') }}"
+
+     - name: Removing - ProxySQL install script
+       file:
+         path: /tmp/proxysql_install.sh
+         state: absent
+
+     - name: Removing - ProxySQL configuration script
+       file:
+         path: /tmp/proxysql_config.sh
+         state: absent
