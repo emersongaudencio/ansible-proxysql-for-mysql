@@ -4,7 +4,7 @@ PROXY_MODE=${1}
 MONITOR_USER=${2}
 MONITOR_PASS=${3}
 
-PROXYADMIN_USER=pxadmin
+PROXYADMIN_USER=proxy_admin
 PROXYSQL_ID=$(($RANDOM))
 
 ### generate root passwd #####
@@ -12,21 +12,24 @@ passwd="$PROXYADMIN_USER-$PROXYSQL_ID"
 touch /tmp/$passwd
 echo $passwd > /tmp/$passwd
 hash=`md5sum  /tmp/$passwd | awk '{print $1}' | sed -e 's/^[[:space:]]*//' | tr -d '/"/'`
-
+hash=`echo ${hash:0:8} | tr  '[a-z]' '[A-Z]'`${hash:8}
+hash=$hash\!\$
 PROXYADMIN_PASS=$hash
 
 ### generate the user file on root linux account #####
 echo "[client]
 user            = $PROXYADMIN_USER
 password        = $PROXYADMIN_PASS
-socket          = /tmp/proxysql_admin.sock
+socket          = /var/lib/proxysql/proxysql_admin.sock
 
 [mysql]
 user            = $PROXYADMIN_USER
 password        = $PROXYADMIN_PASS
-socket          = /tmp/proxysql_admin.sock
+socket          = /var/lib/proxysql/proxysql_admin.sock
 prompt          = '(\u@\h) Admin>\_'
 " > /root/.my.cnf
+
+chmod 400 /root/.my.cnf
 
 if [ "$PROXY_MODE" == "0" ]; then
 
@@ -36,11 +39,11 @@ if [ "$PROXY_MODE" == "0" ]; then
   admin_variables=
   {
       admin_credentials=\"$PROXYADMIN_USER:$PROXYADMIN_PASS\"
-      mysql_ifaces=\"0.0.0.0:6032;/tmp/proxysql_admin.sock\"
+      mysql_ifaces=\"0.0.0.0:6032;/var/lib/proxysql/proxysql_admin.sock\"
       refresh_interval=2000
       web_enabled=true
       web_port=6080
-      stats_credentials=\"stats:$PROXYADMIN_PASS\"
+      stats_credentials=\"proxy_stats:$PROXYADMIN_PASS\"
   }
 
   mysql_variables=
@@ -51,7 +54,7 @@ if [ "$PROXY_MODE" == "0" ]; then
       default_query_timeout=36000000
       have_compress=true
       poll_timeout=2000
-      interfaces=\"0.0.0.0:3306;/tmp/proxysql.sock\"
+      interfaces=\"0.0.0.0:3306;/var/lib/mysql/mysql.sock\"
       default_schema=\"information_schema\"
       stacksize=1048576
       server_version=\"5.7.12\"
@@ -95,8 +98,15 @@ if [ "$PROXY_MODE" == "0" ]; then
       {
           rule_id=100
           active=1
-          match_pattern=\"^SELECT .* FOR UPDATE\"
+          match_pattern=\"^SELECT.*FOR UPDATE\"
           destination_hostgroup=10
+          apply=1
+      },
+      {
+          rule_id=101
+          active=1
+          match_pattern=\"^SELECT.*@@\"
+          destination_hostgroup=30
           apply=1
       },
       {
@@ -130,11 +140,11 @@ elif [[ "$PROXY_MODE" == "1" ]]; then
   admin_variables=
   {
       admin_credentials=\"$PROXYADMIN_USER:$PROXYADMIN_PASS\"
-      mysql_ifaces=\"0.0.0.0:7777;/tmp/proxysql_admin.sock\"
+      mysql_ifaces=\"0.0.0.0:6032;/var/lib/proxysql/proxysql_admin.sock\"
       refresh_interval=2000
       web_enabled=true
       web_port=6080
-      stats_credentials=\"stats:admin\"
+      stats_credentials=\"proxy_stats:$PROXYADMIN_PASS\"
   }
 
   mysql_variables=
@@ -145,7 +155,7 @@ elif [[ "$PROXY_MODE" == "1" ]]; then
       default_query_timeout=36000000
       have_compress=true
       poll_timeout=2000
-      interfaces=\"0.0.0.0:3306;/tmp/proxysql.sock\"
+      interfaces=\"0.0.0.0:3306;/var/lib/mysql/mysql.sock\"
       default_schema=\"information_schema\"
       stacksize=1048576
       server_version=\"5.7.12\"
@@ -178,8 +188,15 @@ elif [[ "$PROXY_MODE" == "1" ]]; then
       {
           rule_id=100
           active=1
-          match_pattern=\"^SELECT .* FOR UPDATE\"
+          match_pattern=\"^SELECT.*FOR UPDATE\"
           destination_hostgroup=10
+          apply=1
+      },
+      {
+          rule_id=101
+          active=1
+          match_pattern=\"^SELECT.*@@\"
+          destination_hostgroup=20
           apply=1
       },
       {
