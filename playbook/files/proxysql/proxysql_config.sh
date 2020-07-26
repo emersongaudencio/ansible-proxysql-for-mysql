@@ -31,6 +31,16 @@ prompt          = '(\u@\h) Admin>\_'
 
 chmod 400 /root/.my.cnf
 
+# create directories for mysql datadir
+DATA_DIR="/var/lib/mysql/datadir"
+if [ ! -d ${DATA_DIR} ]; then
+    mkdir -p ${DATA_DIR}
+    chmod 755 ${DATA_DIR}
+    chown -Rf proxysql: ${DATA_DIR}
+else
+    chown -Rf proxysql: ${DATA_DIR}
+fi
+
 if [ "$PROXY_MODE" == "0" ]; then
 
   echo "datadir=\"/var/lib/proxysql\"
