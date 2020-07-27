@@ -189,8 +189,9 @@ elif [[ "$PROXY_MODE" == "1" ]]; then
   mysql_servers =
   (
       { address=\"primary.replication.local\" , port=3306 , hostgroup=10, max_connections=300 , max_replication_lag = 5, weight=51 },
+      { address=\"primary.replication.local\" , port=3306 , hostgroup=20, max_connections=300 , max_replication_lag = 5, weight=10 },
       { address=\"replica1.replication.local\" , port=3306 , hostgroup=20, max_connections=300 , max_replication_lag = 5, weight=45 },
-      { address=\"replica2.replication.local\" , port=3306 , hostgroup=20, max_connections=300 , max_replication_lag = 5, weight=40 }
+      { address=\"replica2.replication.local\" , port=3306 , hostgroup=20, max_connections=300 , max_replication_lag = 5, weight=45 }
   )
 
   mysql_query_rules =
