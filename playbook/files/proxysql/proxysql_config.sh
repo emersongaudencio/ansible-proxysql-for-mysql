@@ -43,10 +43,10 @@ fi
 
 if [ "$PROXY_MODE" == "0" ]; then
 
-  echo "datadir=\"/var/lib/proxysql\"
-  errorlog=\"/var/lib/proxysql/proxysql.log\"
+echo "datadir=\"/var/lib/proxysql\"
+errorlog=\"/var/lib/proxysql/proxysql.log\"
 
-  admin_variables=
+admin_variables=
   {
       admin_credentials=\"$PROXYADMIN_USER:$PROXYADMIN_PASS\"
       mysql_ifaces=\"0.0.0.0:6032;/var/lib/proxysql/proxysql_admin.sock\"
@@ -56,7 +56,7 @@ if [ "$PROXY_MODE" == "0" ]; then
       stats_credentials=\"proxy_stats:$PROXYADMIN_PASS\"
   }
 
-  mysql_variables=
+mysql_variables=
   {
       threads=4
       max_connections=2048
@@ -82,7 +82,7 @@ if [ "$PROXY_MODE" == "0" ]; then
       monitor_galera_healthcheck_timeout=10
   }
 
-  mysql_galera_hostgroups =
+mysql_galera_hostgroups =
   (
       {
           writer_hostgroup=10
@@ -96,14 +96,14 @@ if [ "$PROXY_MODE" == "0" ]; then
       }
   )
 
-  mysql_servers =
+mysql_servers =
   (
       { address=\"dbnode01.cluster.local\" , port=3306 , hostgroup=10, max_connections=300, weight=51 },
       { address=\"dbnode02.cluster.local\" , port=3306 , hostgroup=20, max_connections=300, weight=45 },
       { address=\"dbnode03.cluster.local\" , port=3306 , hostgroup=30, max_connections=300, weight=40 }
   )
 
-  mysql_query_rules =
+mysql_query_rules =
   (
       {
           rule_id=100
@@ -135,19 +135,19 @@ if [ "$PROXY_MODE" == "0" ]; then
       }
   )
 
-  mysql_users =
+mysql_users =
   (
       { username = \"wordpress\", password = \"test123\", default_hostgroup = 10, transaction_persistent = 0, active = 1 },
       { username = \"app_user\", password = \"test123\", default_hostgroup = 10, transaction_persistent = 0, active = 1 }
   )
-  " > /etc/proxysql.cnf
+" > /etc/proxysql.cnf
 
 elif [[ "$PROXY_MODE" == "1" ]]; then
 
-  echo "datadir=\"/var/lib/proxysql\"
-  errorlog=\"/var/lib/proxysql/proxysql.log\"
+echo "datadir=\"/var/lib/proxysql\"
+errorlog=\"/var/lib/proxysql/proxysql.log\"
 
-  admin_variables=
+admin_variables=
   {
       admin_credentials=\"$PROXYADMIN_USER:$PROXYADMIN_PASS\"
       mysql_ifaces=\"0.0.0.0:6032;/var/lib/proxysql/proxysql_admin.sock\"
@@ -157,7 +157,7 @@ elif [[ "$PROXY_MODE" == "1" ]]; then
       stats_credentials=\"proxy_stats:$PROXYADMIN_PASS\"
   }
 
-  mysql_variables=
+mysql_variables=
   {
       threads=4
       max_connections=2048
@@ -181,12 +181,12 @@ elif [[ "$PROXY_MODE" == "1" ]]; then
       monitor_password=\"$MONITOR_PASS\"
   }
 
-  mysql_replication_hostgroups =
+mysql_replication_hostgroups =
   (
     { writer_hostgroup=10 , reader_hostgroup=20 }
   )
 
-  mysql_servers =
+mysql_servers =
   (
       { address=\"primary.replication.local\" , port=3306 , hostgroup=10, max_connections=300 , max_replication_lag = 5, weight=51 },
       { address=\"primary.replication.local\" , port=3306 , hostgroup=20, max_connections=300 , max_replication_lag = 5, weight=10 },
@@ -194,7 +194,7 @@ elif [[ "$PROXY_MODE" == "1" ]]; then
       { address=\"replica2.replication.local\" , port=3306 , hostgroup=20, max_connections=300 , max_replication_lag = 5, weight=45 }
   )
 
-  mysql_query_rules =
+mysql_query_rules =
   (
       {
           rule_id=100
@@ -226,12 +226,12 @@ elif [[ "$PROXY_MODE" == "1" ]]; then
       }
   )
 
-  mysql_users =
+mysql_users =
   (
       { username = \"wordpress\", password = \"test123\", default_hostgroup = 10, transaction_persistent = 0, active = 1 },
       { username = \"app_user\", password = \"test123\", default_hostgroup = 10, transaction_persistent = 0, active = 1 }
   )
-  " > /etc/proxysql.cnf
+" > /etc/proxysql.cnf
 
 fi
 
