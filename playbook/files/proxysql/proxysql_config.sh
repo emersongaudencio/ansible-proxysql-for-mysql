@@ -233,6 +233,82 @@ mysql_users =
   )
 " > /etc/proxysql.cnf
 
+elif [[ "$PROXY_MODE" == "2" ]]; then
+
+echo "datadir=\"/var/lib/proxysql\"
+errorlog=\"/var/lib/proxysql/proxysql.log\"
+
+admin_variables=
+  {
+      admin_credentials=\"$PROXYADMIN_USER:$PROXYADMIN_PASS\"
+      mysql_ifaces=\"0.0.0.0:6032;/var/lib/proxysql/proxysql_admin.sock\"
+      refresh_interval=2000
+      web_enabled=true
+      web_port=6080
+      stats_credentials=\"proxy_stats:$PROXYADMIN_PASS\"
+  }
+
+mysql_variables=
+  {
+      threads=4
+      max_connections=2048
+      default_query_delay=0
+      default_query_timeout=36000000
+      have_compress=true
+      poll_timeout=2000
+      interfaces=\"0.0.0.0:3306;/var/lib/mysql/mysql.sock\"
+      default_schema=\"information_schema\"
+      stacksize=1048576
+      server_version=\"5.7.12\"
+      connect_timeout_server=10000
+      monitor_history=60000
+      monitor_connect_interval=200000
+      monitor_ping_interval=200000
+      ping_interval_server_msec=10000
+      ping_timeout_server=200
+      commands_stats=true
+      sessions_sort=true
+      monitor_username=\"$MONITOR_USER\"
+      monitor_password=\"$MONITOR_PASS\"
+  }
+
+mysql_servers =
+  (
+      { address=\"primary.db.local\" , port=3306 , hostgroup=10, max_connections=300 , max_replication_lag = 5, weight=100 }
+  )
+
+mysql_query_rules =
+  (
+      {
+          rule_id=100
+          active=1
+          match_pattern=\"^SELECT.*FOR UPDATE\"
+          destination_hostgroup=10
+          apply=1
+      },
+      {
+          rule_id=200
+          active=1
+          match_pattern=\"^SELECT .*\"
+          destination_hostgroup=10
+          apply=1
+      },
+      {
+          rule_id=300
+          active=1
+          match_pattern=\".*\"
+          destination_hostgroup=10
+          apply=1
+      }
+  )
+
+mysql_users =
+  (
+      { username = \"wordpress\", password = \"test123\", default_hostgroup = 10, transaction_persistent = 0, active = 1 },
+      { username = \"app_user\", password = \"test123\", default_hostgroup = 10, transaction_persistent = 0, active = 1 }
+  )
+" > /etc/proxysql.cnf
+
 fi
 
 ### restart proxysql service to apply new config file generate in this stage ###
