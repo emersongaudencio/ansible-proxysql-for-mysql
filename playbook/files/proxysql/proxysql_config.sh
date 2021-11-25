@@ -32,7 +32,7 @@ prompt          = '(\u@\h) Admin>\_'
 chmod 400 /root/.my.cnf
 
 # create directories for mysql datadir
-DATA_DIR="/var/lib/mysql/datadir"
+DATA_DIR="/var/lib/mysql"
 if [ ! -d ${DATA_DIR} ]; then
     mkdir -p ${DATA_DIR}
     chmod 755 ${DATA_DIR}

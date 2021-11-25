@@ -1,98 +1,235 @@
 #!/bin/bash
-# Parameters configuration
+echo "HOSTNAME: " `hostname`
+echo "BEGIN - [`date +%d/%m/%Y" "%H:%M:%S`]"
+echo "##############"
 
-verify_proxysql=`rpm -qa | grep proxysql`
-if [[ $verify_proxysql == "proxysql"* ]]
-then
-echo "$verify_proxysql is installed!"
-else
-   ##### FIREWALLD DISABLE #########################
-   systemctl disable firewalld
-   systemctl stop firewalld
-   ######### SELINUX ###############################
-   sed -ie 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
-   # disable selinux on the fly
-   /usr/sbin/setenforce 0
+# os_type = rhel
+os_type=
+# os_version as demanded by the OS (codename, major release, etc.)
+os_version=
+supported="Only RHEL/CentOS 7 & 8 are supported for this installation process."
 
-   ### clean yum cache ###
-   rm -rf /etc/yum.repos.d/MariaDB.repo
-   rm -rf /etc/yum.repos.d/mariadb.repo
-   rm -rf /etc/yum.repos.d/mysql-community.repo
-   rm -rf /etc/yum.repos.d/mysql-community-source.repo
-   rm -rf /etc/yum.repos.d/percona-original-release.repo
-   yum clean headers
-   yum clean packages
-   yum clean metadata
+msg(){
+    type=$1 #${1^^}
+    shift
+    printf "[$type] %s\n" "$@" >&2
+}
 
-   # configure user
-   adduser proxysql
-   chsh -s /bin/bash proxysql
+error(){
+    msg error "$@"
+    exit 1
+}
 
-   ####### PACKAGES ###########################
-   # -------------- For RHEL/CentOS 7 --------------
-   yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+identify_os(){
+    arch=$(uname -m)
+    # Check for RHEL/CentOS, Fedora, etc.
+    if command -v rpm >/dev/null && [[ -e /etc/redhat-release || -e /etc/os-release ]]
+    then
+        os_type=rhel
+        el_version=$(rpm -qa '(oraclelinux|sl|redhat|centos|fedora|rocky|alma|system)*release(|-server)' --queryformat '%{VERSION}')
+        case $el_version in
+            1*) os_version=6 ; error "RHEL/CentOS 6 is no longer supported" "$supported" ;;
+            2*) os_version=7 ;;
+            5*) os_version=5 ; error "RHEL/CentOS 5 is no longer supported" "$supported" ;;
+            6*) os_version=6 ; error "RHEL/CentOS 6 is no longer supported" "$supported" ;;
+            7*) os_version=7 ;;
+            8*) os_version=8 ;;
+             *) error "Detected RHEL or compatible but version ($el_version) is not supported." "$supported"  "$otherplatforms" ;;
+         esac
+         if [[ $arch == aarch64 ]] && [[ $os_version != 7 ]]; then error "Only RHEL/CentOS 7 are supported for ARM64. Detected version: '$os_version'"; fi
+    fi
 
-   ### install pre-packages ####
-   yum -y install screen nload bmon openssl libaio rsync snappy net-tools wget nmap htop dstat sysstat
+    if ! [[ $os_type ]] || ! [[ $os_version ]]
+    then
+        error "Could not identify OS type or version." "$supported"
+    fi
+}
 
-   ### ProxySQL Setup ####
+### OS auto discovey to identify which is the OS and version thats been used it.
+identify_os
+
+echo $os_type
+echo $os_version
+
+##### FIREWALLD DISABLE ########################
+systemctl disable firewalld
+systemctl stop firewalld
+######### SELINUX ###############################
+sed -ie 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+# disable selinux on the fly
+/usr/sbin/setenforce 0
+
+### clean yum cache ###
+rm -rf /etc/yum.repos.d/MariaDB.repo
+rm -rf /etc/yum.repos.d/mariadb.repo
+rm -rf /etc/yum.repos.d/mysql-community.repo
+rm -rf /etc/yum.repos.d/mysql-community-source.repo
+rm -rf /etc/yum.repos.d/percona-original-release.repo
+rm -rf /etc/yum.repos.d/proxysql.repo
+yum clean all
+
+####### PACKAGES ###########################
+if [[ $os_type == "rhel" ]]; then
+    # yum -y install epel-release
+    if [[ $os_version == "7" ]]; then
+      yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    elif [[ $os_version == "8" ]]; then
+      yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+    fi
+fi
+
+### remove old packages ####
+yum -y remove mariadb-libs
+yum -y remove 'maria*'
+yum -y remove 'proxysql*'
+yum -y remove mysql mysql-server mysql-libs mysql-common mysql-community-common mysql-community-libs
+yum -y remove 'mysql*'
+yum -y remove 'percona*'
+yum -y remove 'Percona-*'
+yum -y remove MariaDB-common MariaDB-compat
+yum -y remove MariaDB-server MariaDB-client
+yum -y remove percona-release
+
+### clean yum cache ###
+yum clean all
+
+### monitoring pre-packages ####
+yum -y install nload bmon iptraf glances nmap htop dstat sysstat socat
+
+# dev tools
+yum -y install screen yum-utils expect perl perl-DBI perl-IO-Socket-SSL perl-Digest-MD5 perl-TermReadKey  libev gcc zlib zlib-devel openssl openssl-devel python3 python3-pip python3-devel
+
+# others pre-packages
+yum -y install pigz zlib file sudo libaio rsync snappy net-tools wget
+
+### clean yum cache ###
+yum clean all
+
+#### REPO PROXYSQL ######
+if [[ $os_type == "rhel" ]]; then
+  if [[ $os_version == "7" ]]; then
+    ### ProxySQL Setup ####
+    echo "[proxysql_repo]
+ name=ProxySQL YUM repository
+ baseurl=https://repo.proxysql.com/ProxySQL/proxysql-2.0.x/centos/latest
+ gpgcheck=1
+ gpgkey=https://repo.proxysql.com/ProxySQL/repo_pub_key" > /etc/yum.repos.d/proxysql.repo
+
+  elif [[ $os_version == "8" ]]; then
+    ### ProxySQL Setup ####
    echo "[proxysql_repo]
 name=ProxySQL YUM repository
-baseurl=https://repo.proxysql.com/ProxySQL/proxysql-2.0.x/centos/latest
+baseurl=https://repo.proxysql.com/ProxySQL/proxysql-2.0.x/centos/8
 gpgcheck=1
 gpgkey=https://repo.proxysql.com/ProxySQL/repo_pub_key" > /etc/yum.repos.d/proxysql.repo
 
-   ### Installation ProxySQL via yum ###
-   yum -y install proxysql
-
-   ### Installation MARIADB via yum ####
-   curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash
-   yum -y install MariaDB-client
-
-   ### Percona #####
-   ### https://www.percona.com/doc/percona-server/LATEST/installation/yum_repo.html
-   yum install https://repo.percona.com/yum/percona-release-latest.noarch.rpm -y
-   yum -y install percona-toolkit sysbench
-
-   ##### CONFIG PROFILE #############
-   check_profile=$(cat /etc/profile | grep '# proxysql-pre-reqs' | wc -l)
-   if [ "$check_profile" == "0" ]; then
-   echo ' ' >> /etc/profile
-   echo '# proxysql-pre-reqs' >> /etc/profile
-   echo 'if [ $USER = "proxysql" ]; then' >> /etc/profile
-   echo '  if [ $SHELL = "/bin/bash" ]; then' >> /etc/profile
-   echo '    ulimit -u 65536 -n 65536' >> /etc/profile
-   echo '  else' >> /etc/profile
-   echo '    ulimit -u 65536 -n 65536' >> /etc/profile
-   echo '  fi' >> /etc/profile
-   echo 'fi' >> /etc/profile
-   else
-   echo "ProxySQL Pre-reqs for /etc/profile is already in place!"
-   fi
-
-   #####  ProxySQL LIMITS ###########################
-   check_limits=$(cat /etc/security/limits.conf | grep '# proxysql-pre-reqs' | wc -l)
-   if [ "$check_limits" == "0" ]; then
-   echo ' ' >> /etc/security/limits.conf
-   echo '# proxysql-pre-reqs' >> /etc/security/limits.conf
-   echo 'proxysql              soft    nproc   102400' >> /etc/security/limits.conf
-   echo 'proxysql              hard    nproc   102400' >> /etc/security/limits.conf
-   echo 'proxysql              soft    nofile  102400' >> /etc/security/limits.conf
-   echo 'proxysql              hard    nofile  102400' >> /etc/security/limits.conf
-   echo 'proxysql              soft    stack   102400' >> /etc/security/limits.conf
-   echo 'proxysql              soft    core unlimited' >> /etc/security/limits.conf
-   echo 'proxysql              hard    core unlimited' >> /etc/security/limits.conf
-   echo '# all_users' >> /etc/security/limits.conf
-   echo '* soft nofile 102400' >> /etc/security/limits.conf
-   echo '* hard nofile 102400' >> /etc/security/limits.conf
-   else
-   echo "ProxySQL Pre-reqs for /etc/security/limits.conf is already in place!"
-   fi
-
-   mkdir -p /etc/systemd/system/proxysql.service.d/
-   echo ' ' > /etc/systemd/system/proxysql.service.d/limits.conf
-   echo '# proxysql' >> /etc/systemd/system/proxysql.service.d/limits.conf
-   echo '[Service]' >> /etc/systemd/system/proxysql.service.d/limits.conf
-   echo 'LimitNOFILE=102400' >> /etc/systemd/system/proxysql.service.d/limits.conf
-   systemctl daemon-reload
+  fi
 fi
+### Installation ProxySQL via yum ###
+yum -y install proxysql
+
+### installation mysql add-ons via yum ####
+yum -y install perl-DBD-MySQL
+
+####### PACKAGES ###########################
+if [[ $os_type == "rhel" ]]; then
+    if [[ $os_version == "7" ]]; then
+      # -------------- For RHEL/CentOS 7 --------------
+      #### mydumper ######
+      yum -y install https://github.com/maxbube/mydumper/releases/download/v0.10.7-2/mydumper-0.10.7-2.el7.x86_64.rpm
+
+      #### qpress #####
+      yum -y install https://github.com/emersongaudencio/linux_packages/raw/master/RPM/qpress-11-1.el7.x86_64.rpm
+    elif [[ $os_version == "8" ]]; then
+      #### mydumper ######
+      yum -y install https://github.com/maxbube/mydumper/releases/download/v0.10.7-2/mydumper-0.10.7-2.el8.x86_64.rpm
+
+      #### qpress #####
+      yum -y install https://repo.percona.com/tools/yum/release/8/RPMS/x86_64/qpress-11-1.el8.x86_64.rpm
+    fi
+fi
+
+### Installation MARIADB via yum ####
+curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash
+yum -y install MariaDB-client
+
+#####  ProxySQL LIMITS ###########################
+check_limits=$(cat /etc/security/limits.conf | grep '# proxysql-pre-reqs' | wc -l)
+if [ "$check_limits" == "0" ]; then
+echo ' ' >> /etc/security/limits.conf
+echo '# proxysql-pre-reqs' >> /etc/security/limits.conf
+echo 'proxysql              soft    nproc   102400' >> /etc/security/limits.conf
+echo 'proxysql              hard    nproc   102400' >> /etc/security/limits.conf
+echo 'proxysql              soft    nofile  102400' >> /etc/security/limits.conf
+echo 'proxysql              hard    nofile  102400' >> /etc/security/limits.conf
+echo 'proxysql              soft    stack   102400' >> /etc/security/limits.conf
+echo 'proxysql              soft    core unlimited' >> /etc/security/limits.conf
+echo 'proxysql              hard    core unlimited' >> /etc/security/limits.conf
+echo '# all_users' >> /etc/security/limits.conf
+echo '* soft nofile 102400' >> /etc/security/limits.conf
+echo '* hard nofile 102400' >> /etc/security/limits.conf
+else
+echo "ProxySQL Pre-reqs for /etc/security/limits.conf is already in place!"
+fi
+
+##### CONFIG PROFILE #############
+check_profile=$(cat /etc/profile | grep '# proxysql-pre-reqs' | wc -l)
+if [ "$check_profile" == "0" ]; then
+echo ' ' >> /etc/profile
+echo '# proxysql-pre-reqs' >> /etc/profile
+echo 'if [ $USER = "proxysql" ]; then' >> /etc/profile
+echo '  if [ $SHELL = "/bin/bash" ]; then' >> /etc/profile
+echo '    ulimit -u 102400 -n 102400' >> /etc/profile
+echo '  else' >> /etc/profile
+echo '    ulimit -u 102400 -n 102400' >> /etc/profile
+echo '  fi' >> /etc/profile
+echo 'fi' >> /etc/profile
+else
+echo "ProxySQL Pre-reqs for /etc/profile is already in place!"
+fi
+
+##### SYSCTL MYSQL ###########################
+check_sysctl=$(cat /etc/sysctl.conf | grep '# proxysql-pre-reqs' | wc -l)
+if [ "$check_sysctl" == "0" ]; then
+# insert parameters into /etc/sysctl.conf for incresing MySQL limits
+echo "# proxysql-pre-reqs
+# virtual memory limits
+vm.swappiness = 1
+vm.dirty_background_ratio = 3
+vm.dirty_ratio = 40
+vm.dirty_expire_centisecs = 500
+vm.dirty_writeback_centisecs = 100
+fs.suid_dumpable = 1
+vm.nr_hugepages = 0
+# file system limits
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+# kernel limits
+kernel.panic_on_oops = 1
+kernel.shmall = 1073741824
+kernel.shmmax = 4398046511104
+kernel.shmmni = 4096
+# kernel semaphores: semmsl, semmns, semopm, semmni
+kernel.sem = 250 32000 100 128
+# networking limits
+net.ipv4.ip_local_port_range = 9000 65499
+net.core.rmem_default=4194304
+net.core.rmem_max=4194304
+net.core.wmem_default=262144
+net.core.wmem_max=1048586" >> /etc/sysctl.conf
+else
+echo "ProxySQL Pre-reqs for /etc/sysctl.conf is already in place!"
+fi
+# reload confs of /etc/sysctl.confs
+sysctl -p
+
+#####  PROXYSQL LIMITS ###########################
+mkdir -p /etc/systemd/system/proxysql.service.d/
+echo ' ' > /etc/systemd/system/proxysql.service.d/limits.conf
+echo '# proxysql' >> /etc/systemd/system/proxysql.service.d/limits.conf
+echo '[Service]' >> /etc/systemd/system/proxysql.service.d/limits.conf
+echo 'LimitNOFILE=102400' >> /etc/systemd/system/proxysql.service.d/limits.conf
+systemctl daemon-reload
+
+echo "##############"
+echo "END - [`date +%d/%m/%Y" "%H:%M:%S`]"
