@@ -2,6 +2,8 @@
 echo "HOSTNAME: " `hostname`
 echo "BEGIN - [`date +%d/%m/%Y" "%H:%M:%S`]"
 echo "##############"
+echo "$1" > /tmp/PROXYSQL_VERSION
+PROXYSQL_VERSION=$(cat /tmp/PROXYSQL_VERSION)
 
 # os_type = rhel
 os_type=
@@ -105,13 +107,27 @@ yum -y install pigz zlib file sudo libaio rsync snappy net-tools wget
 ### clean yum cache ###
 yum clean all
 
+if [ "$PROXYSQL_VERSION" == "20" ]; then
+   VERSION="2.0.x"
+elif [[ "$PROXYSQL_VERSION" == "21" ]]; then
+   VERSION="2.1.x"
+elif [[ "$PROXYSQL_VERSION" == "22" ]]; then
+   VERSION="2.2.x"
+elif [[ "$PROXYSQL_VERSION" == "23" ]]; then
+   VERSION="2.3.x"
+elif [[ "$PROXYSQL_VERSION" == "24" ]]; then
+   VERSION="2.4.x"
+else
+   VERSION="2.4.x"
+fi
+
 #### REPO PROXYSQL ######
 if [[ $os_type == "rhel" ]]; then
   if [[ $os_version == "7" ]]; then
     ### ProxySQL Setup ####
     echo "[proxysql_repo]
  name=ProxySQL YUM repository
- baseurl=https://repo.proxysql.com/ProxySQL/proxysql-2.0.x/centos/latest
+ baseurl=https://repo.proxysql.com/ProxySQL/proxysql-$VERSION/centos/latest
  gpgcheck=1
  gpgkey=https://repo.proxysql.com/ProxySQL/repo_pub_key" > /etc/yum.repos.d/proxysql.repo
 
@@ -119,7 +135,7 @@ if [[ $os_type == "rhel" ]]; then
     ### ProxySQL Setup ####
    echo "[proxysql_repo]
 name=ProxySQL YUM repository
-baseurl=https://repo.proxysql.com/ProxySQL/proxysql-2.0.x/centos/8
+baseurl=https://repo.proxysql.com/ProxySQL/proxysql-$VERSION/centos/8
 gpgcheck=1
 gpgkey=https://repo.proxysql.com/ProxySQL/repo_pub_key" > /etc/yum.repos.d/proxysql.repo
 
