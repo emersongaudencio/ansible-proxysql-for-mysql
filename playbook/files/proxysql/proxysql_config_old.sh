@@ -8,21 +8,25 @@ PROXYADMIN_USER=proxy_admin
 PROXYSQL_ID=$(($RANDOM))
 
 ### generate root passwd #####
-#### Generate random password linux systems ####
-random32=$(LC_CTYPE=C tr -dc 'a-zA-Z0-9&@.^' < /dev/urandom | fold -w 32 | head -n 1)
-PROXYADMIN_PASS=$random32
+passwd="$PROXYADMIN_USER-$PROXYSQL_ID"
+touch /tmp/$passwd
+echo $passwd > /tmp/$passwd
+hash=`md5sum  /tmp/$passwd | awk '{print $1}' | sed -e 's/^[[:space:]]*//' | tr -d '/"/'`
+hash=`echo ${hash:0:8} | tr  '[a-z]' '[A-Z]'`${hash:8}
+hash=$hash\!\$
+PROXYADMIN_PASS=$hash
 
 ### generate the user file on root linux account #####
 echo "[client]
 user            = $PROXYADMIN_USER
-password        = \"$PROXYADMIN_PASS\"
+password        = $PROXYADMIN_PASS
 socket          = /var/lib/proxysql/proxysql_admin.sock
 
 [mysql]
 user            = $PROXYADMIN_USER
-password        = \"$PROXYADMIN_PASS\"
+password        = $PROXYADMIN_PASS
 socket          = /var/lib/proxysql/proxysql_admin.sock
-prompt          = \"(\u@\h) ProxySQL Admin>\_\"
+prompt          = '(\u@\h) Admin>\_'
 " > /root/.my.cnf
 
 chmod 400 /root/.my.cnf
@@ -44,7 +48,7 @@ errorlog=\"/var/lib/proxysql/proxysql.log\"
 
 admin_variables=
   {
-      admin_credentials=\"admin:admin;$PROXYADMIN_USER:$PROXYADMIN_PASS\"
+      admin_credentials=\"$PROXYADMIN_USER:$PROXYADMIN_PASS\"
       mysql_ifaces=\"0.0.0.0:6032;/var/lib/proxysql/proxysql_admin.sock\"
       refresh_interval=2000
       web_enabled=true
@@ -145,7 +149,7 @@ errorlog=\"/var/lib/proxysql/proxysql.log\"
 
 admin_variables=
   {
-      admin_credentials=\"admin:admin;$PROXYADMIN_USER:$PROXYADMIN_PASS\"
+      admin_credentials=\"$PROXYADMIN_USER:$PROXYADMIN_PASS\"
       mysql_ifaces=\"0.0.0.0:6032;/var/lib/proxysql/proxysql_admin.sock\"
       refresh_interval=2000
       web_enabled=true
@@ -236,7 +240,7 @@ errorlog=\"/var/lib/proxysql/proxysql.log\"
 
 admin_variables=
   {
-      admin_credentials=\"admin:admin;$PROXYADMIN_USER:$PROXYADMIN_PASS\"
+      admin_credentials=\"$PROXYADMIN_USER:$PROXYADMIN_PASS\"
       mysql_ifaces=\"0.0.0.0:6032;/var/lib/proxysql/proxysql_admin.sock\"
       refresh_interval=2000
       web_enabled=true

@@ -61,6 +61,9 @@ sed -ie 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 # disable selinux on the fly
 /usr/sbin/setenforce 0
 
+# configure user
+adduser proxysql
+
 ### clean yum cache ###
 rm -rf /etc/yum.repos.d/MariaDB.repo
 rm -rf /etc/yum.repos.d/mariadb.repo
@@ -83,7 +86,6 @@ fi
 ### remove old packages ####
 yum -y remove mariadb-libs
 yum -y remove 'maria*'
-yum -y remove 'proxysql*'
 yum -y remove mysql mysql-server mysql-libs mysql-common mysql-community-common mysql-community-libs
 yum -y remove 'mysql*'
 yum -y remove 'percona*'
@@ -91,18 +93,19 @@ yum -y remove 'Percona-*'
 yum -y remove MariaDB-common MariaDB-compat
 yum -y remove MariaDB-server MariaDB-client
 yum -y remove percona-release
+yum -y remove proxysql
 
 ### clean yum cache ###
 yum clean all
 
 ### monitoring pre-packages ####
-yum -y install nload bmon iptraf glances nmap htop dstat sysstat socat
+yum -y install nload bmon iptraf nmap htop dstat sysstat socat
 
 # dev tools
-yum -y install screen yum-utils expect perl perl-DBI perl-IO-Socket-SSL perl-Digest-MD5 perl-TermReadKey  libev gcc zlib zlib-devel openssl openssl-devel python3 python3-pip python3-devel
+yum -y install screen yum-utils expect perl perl-DBI perl-IO-Socket-SSL perl-Digest-MD5 perl-TermReadKey  libev gcc zlib zlib-devel openssl openssl-devel
 
 # others pre-packages
-yum -y install pigz zlib file sudo libaio rsync snappy net-tools wget
+yum -y install pigz zlib file sudo libaio rsync snappy net-tools wget tar
 
 ### clean yum cache ###
 yum clean all
@@ -137,37 +140,29 @@ if [[ $os_type == "rhel" ]]; then
 name=ProxySQL YUM repository
 baseurl=https://repo.proxysql.com/ProxySQL/proxysql-$VERSION/centos/8
 gpgcheck=1
-gpgkey=https://repo.proxysql.com/ProxySQL/repo_pub_key" > /etc/yum.repos.d/proxysql.repo
+gpgkey=https://repo.proxysql.com/ProxySQL/proxysql-$VERSION/repo_pub_key" > /etc/yum.repos.d/proxysql.repo
 
   fi
 fi
 ### Installation ProxySQL via yum ###
 yum -y install proxysql
 
-### installation mysql add-ons via yum ####
-yum -y install perl-DBD-MySQL
-
-####### PACKAGES ###########################
-if [[ $os_type == "rhel" ]]; then
-    if [[ $os_version == "7" ]]; then
-      # -------------- For RHEL/CentOS 7 --------------
-      #### mydumper ######
-      yum -y install https://github.com/maxbube/mydumper/releases/download/v0.10.7-2/mydumper-0.10.7-2.el7.x86_64.rpm
-
-      #### qpress #####
-      yum -y install https://github.com/emersongaudencio/linux_packages/raw/master/RPM/qpress-11-1.el7.x86_64.rpm
-    elif [[ $os_version == "8" ]]; then
-      #### mydumper ######
-      yum -y install https://github.com/maxbube/mydumper/releases/download/v0.10.7-2/mydumper-0.10.7-2.el8.x86_64.rpm
-
-      #### qpress #####
-      yum -y install https://repo.percona.com/tools/yum/release/8/RPMS/x86_64/qpress-11-1.el8.x86_64.rpm
-    fi
+#### install mysql #####
+verify_mysql=`mysql --version`
+if [[ "${verify_mysql}" == "mysql"* ]] ; then
+  echo "$verify_mysql is installed!"
+  echo "MySQL-Path: $(which mysql)"
+else
+  # install mysql 8.0.23 linux64 minimal
+  cd /usr/local/bin/
+  curl -s https://raw.githubusercontent.com/emersongaudencio/linux_packages/master/mysql-8.0.23-linux64-minimal.tgz -o mysql-8.0.23-linux64-minimal.tgz
+  tar -xzvf mysql-8.0.23-linux64-minimal.tgz
+  ln -r -s mysql-8.0.23-linux64-minimal/bin/mysql mysql
+  ln -r -s mysql-8.0.23-linux64-minimal/bin/mysqldump mysqldump
+  source /etc/profile
+  mysql --version
+  echo "MySQL-Path: $(which mysql)"
 fi
-
-### Installation MARIADB via yum ####
-curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash
-yum -y install MariaDB-client
 
 #####  ProxySQL LIMITS ###########################
 check_limits=$(cat /etc/security/limits.conf | grep '# proxysql-pre-reqs' | wc -l)
